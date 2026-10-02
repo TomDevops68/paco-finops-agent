@@ -1,0 +1,38 @@
+# Paste this at https://api.slack.com/apps -> "Create New App" -> "From an
+# app manifest" -> pick the Blinx workspace. See README.md in this folder
+# for the two-phase setup (Event Subscriptions can't be enabled until the
+# Slack Events API endpoint actually exists, i.e. after the first deploy).
+display_information:
+  name: PACO Cost Agent
+  description: Explains why AWS costs moved when tagged under the daily Cloud Spending Analysis report.
+  background_color: '#2c2d30'
+
+oauth_config:
+  scopes:
+    bot:
+      # Receive app_mention events (Events API) — the only way this agent
+      # is triggered.
+      - app_mentions:read
+      # apps/functions/{slack-events,notify-slack}/handler.ts: chat.postMessage/chat.update.
+      - chat:write
+      # packages/slack-connector/src/client.ts's getThreadRoot ->
+      # conversations.replies, to read the tagged thread's root message.
+      # Both history scopes included since the cost-report channel's type
+      # (public/private) isn't decided yet — conversations.replies needs
+      # the one matching wherever the bot ends up.
+      - channels:history
+      - groups:history
+
+settings:
+  # Filled in after the first deploy, once IngestionStack's SlackEventsUrl
+  # output is a real, live HTTPS endpoint — Slack verifies this URL
+  # immediately when you save it, so it can't be set before that.
+  # event_subscriptions:
+  #   request_url: https://<api-id>.execute-api.eu-west-2.amazonaws.com/staging/slack-events
+  #   bot_events:
+  #     - app_mention
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

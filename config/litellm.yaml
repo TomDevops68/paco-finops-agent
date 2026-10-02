@@ -1,0 +1,29 @@
+# LiteLLM gateway config (docs/adr/0002-litellm-model-gateway.md).
+#
+# Consumed by the standalone LiteLLM ECS service (apps/infra/lib/litellm-service.ts),
+# never by the investigation worker directly. The worker only knows the
+# model_name below (config/harness.yaml's model.gatewayModelName), never the
+# underlying provider/model — swapping the active route is a change to this
+# file only.
+model_list:
+  - model_name: kimi-k3
+    litellm_params:
+      # Moonshot AI Kimi K3, natively hosted on Bedrock. Active route as of
+      # this repo's creation (2026-09-26) because direct Anthropic-on-Bedrock
+      # access is broken on this AWS account (INVALID_PAYMENT_INSTRUMENT on
+      # the Anthropic Marketplace vendor subscription — an account billing
+      # issue, not fixable via code) — the exact same block
+      # paco-troubleshoot-agent hit and worked around the same way
+      # (config/litellm.yaml there, 2026-09-22 pivot). Only supports
+      # INFERENCE_TYPE: INFERENCE_PROFILE, so this must be the `global.`
+      # cross-region inference profile ID, not a bare model ID — confirmed
+      # there via `aws bedrock list-foundation-models` and a live
+      # `bedrock-runtime converse` call with a real `tool_use` response.
+      # Re-verify against `aws bedrock list-inference-profiles` in this
+      # account before deploy — Bedrock model availability on this account
+      # has changed within days more than once.
+      model: bedrock/global.moonshotai.kimi-k3
+      aws_region_name: os.environ/AWS_REGION
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

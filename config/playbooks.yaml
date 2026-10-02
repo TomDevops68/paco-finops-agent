@@ -1,0 +1,35 @@
+schemaVersion: 1
+
+selection:
+  new: NEW_SERVICE_OR_USAGE_TYPE
+  fallback: GENERIC
+
+playbooks:
+  # A brand-new service/usage-type line is a narrower investigation: is this
+  # really new (first-ever cost) or a services/usage-type combination that
+  # simply didn't appear yesterday. No resource-level correlation needed
+  # until cost/usage evidence itself suggests one.
+  NEW_SERVICE_OR_USAGE_TYPE:
+    enabledTools:
+      - mcp__cost__get_report
+      - mcp__cost__get_cost_and_usage
+      - mcp__cost__get_prior_reports
+
+  # Every other notable line (increase or decrease past the significance
+  # threshold): the full evidence toolset, since the actual driver — usage
+  # growth, a scaling/deployment change, RI/SP coverage drop, a one-off
+  # anomaly, forecast overrun, or an idle/underutilized resource — can't be
+  # determined from the report line alone. See COST_AGENT_BUILD_SPEC.md §6.
+  GENERIC:
+    enabledTools:
+      - mcp__cost__get_report
+      - mcp__cost__get_cost_and_usage
+      - mcp__cost__get_cost_anomalies
+      - mcp__cost__get_savings_plans_utilization
+      - mcp__cost__get_reservation_utilization
+      - mcp__cost__get_rightsizing_recommendations
+      - mcp__cost__describe_resources
+      - mcp__cost__get_prior_reports
+      - mcp__cost__list_cloudwatch_metrics
+      - mcp__cost__get_cloudwatch_metric
+      - mcp__cost__get_cloudtrail_events

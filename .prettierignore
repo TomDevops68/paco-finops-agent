@@ -1,0 +1,5 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+COST_AGENT_BUILD_SPEC.md

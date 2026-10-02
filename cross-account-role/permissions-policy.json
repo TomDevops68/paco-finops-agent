@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CostAgentDescribeOnly",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeServices",
+        "rds:DescribeDBInstances",
+        "ec2:DescribeInstances",
+        "lambda:GetFunctionConfiguration",
+        "cloudwatch:ListMetrics",
+        "cloudwatch:GetMetricData",
+        "cloudtrail:LookupEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

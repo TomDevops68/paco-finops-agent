@@ -1,0 +1,15 @@
+# Mirrors paco-daily-cost-report/lambda/index.py's ACCOUNT_MAP exactly.
+# Kept manually in sync — the cost agent doesn't share code or state with
+# that (separate, already-deployed) repo. Update both if an account is
+# renamed or a commented-out account there is enabled.
+#
+# id -> display name, exactly as it appears in the Slack cost report.
+accounts:
+  '025031850414': 'Blinx - Management Account'
+  '510825518696': 'PACO - Production'
+  '680099409919': 'PACO - Non-Production'
+  # Present in the source ACCOUNT_MAP but currently commented out there
+  # (not yet reporting): '533267356181' PACO24 - Non-Production,
+  # '590183672878' PACO24 - Production, '169766811767' TOP - Production,
+  # '352833290036' TOP - Non-Production, '343834780631' Blinx - Monitoring
+  # Account, '981504554553' Blinx - Development POCs.

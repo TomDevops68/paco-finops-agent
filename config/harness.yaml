@@ -1,0 +1,234 @@
+schemaVersion: 1
+environment: dev
+
+environments:
+  dev:
+    connectorMode: mock
+    awsAccountId: null
+    awsRegion: null
+    requireExplicitTargetConfirmation: false
+    targetConfirmation: null
+    allowlists:
+      awsAccounts: []
+    crossAccountRoleName: null
+    network: null
+    slack:
+      enabled: false
+      channelId: null
+
+  # Fail-closed by design (see loadHarnessConfig in packages/config/src/
+  # harness-config.ts): every null below must be filled in with the real
+  # account/region/allowlist/network before this environment can synth or
+  # deploy. Never populate these with guessed values.
+  staging:
+    connectorMode: aws
+    # Blinx - Management Account (config/account-map.yaml) — Cost Explorer's
+    # org-wide view is only queryable from the payer account, matching
+    # paco-daily-cost-report's own setup. Confirmed live via
+    # `aws sts get-caller-identity` (2026-09-27).
+    awsAccountId: '025031850414'
+    awsRegion: eu-west-2
+    requireExplicitTargetConfirmation: true
+    # Deliberate human confirmation gate — set only when explicitly told to
+    # deploy. User confirmed live via chat, 2026-09-27.
+    targetConfirmation: 'confirmed 2026-09-27 by tom.nguyen'
+    allowlists:
+      # PacoCostAgentReadOnly confirmed live in both accounts (2026-09-27,
+      # verified via aws iam get-role/get-role-policy) — see
+      # cross-account-role/README.md. Trust is currently the management
+      # account root (temporary bootstrap, not yet the exact worker task
+      # role ARN); narrow it per that README once the first real deploy
+      # creates CostAgent-staging-worker-task-role.
+      awsAccounts: ['510825518696', '680099409919']
+    crossAccountRoleName: PacoCostAgentReadOnly
+    # {MGMT}VPC — the smallest, most isolated VPC in this account (2 subnets,
+    # no other workloads). Deliberately NOT vpn-vpc: that VPC is a Transit
+    # Gateway hub routed to NHS-PROD (172.40.0.0/16) and the HSCN NHS-network
+    # VPCs — see docs/adr/0003-public-subnets-no-nat.md for the full
+    # investigation. Public, IGW-routed subnets, no NAT Gateway — same ADR.
+    network:
+      vpcId: vpc-00aad6298f2cf1b27
+      # Both {MGMT}VPC subnets are in eu-west-2a (confirmed live,
+      # 2026-09-27) — no multi-AZ redundancy in this VPC as provisioned.
+      # ec2.Vpc.fromVpcAttributes requires one availabilityZones entry per
+      # subnet ID, so the AZ is listed twice to match.
+      availabilityZones: ['eu-west-2a', 'eu-west-2a']
+      publicSubnetIds: ['subnet-0ad66d6a9364aa1cd', 'subnet-015f4ef8de5acd7c4']
+    slack:
+      enabled: true
+      # Real channel where paco-daily-cost-report posts its daily "Cloud
+      # Spending Analysis" message (bot invited 2026-09-27). Reverted here
+      # 2026-09-28 after the sandbox-channel (C0B2Q9SE7S5) end-to-end test
+      # succeeded — see tasks/todo.md.
+      channelId: C0AQGLUN2Q6
+
+  prod:
+    connectorMode: aws
+    awsAccountId: null
+    awsRegion: null
+    requireExplicitTargetConfirmation: true
+    targetConfirmation: null
+    allowlists:
+      # PACO - Production, PACO - Non-Production — see config/account-map.yaml.
+      # Deliberately excludes the management account itself: no ECS/RDS/EC2/
+      # Lambda workloads run there, only Cost Explorer (queried directly, no
+      # cross-account role needed for that).
+      awsAccounts: ['510825518696', '680099409919']
+    crossAccountRoleName: null
+    network: null
+    slack:
+      enabled: false
+      channelId: null
+
+productionSafety:
+  failOnMissingTarget: true
+  failOnMissingAllowlists: true
+  requireAccountAndRegionConfirmation: true
+  readOnly: true
+  allowMutationTools: false
+  allowShellTools: false
+  allowFileWriteTools: false
+  allowUnrestrictedWebTools: false
+
+configBucketKeys:
+  accountMap: config/account-map.yaml
+  playbooks: playbooks.yaml
+
+significance:
+  # A line is "notable" (flagged in the Slack reply, eligible for
+  # investigation) when its trend magnitude is at least this percent, or the
+  # line is brand new. See packages/core/src/cost-playbook.ts.
+  significantChangePercent: 10
+  # TEMPORARY (2026-09-30, user request): "Bedrock Nova Lite" is a $0.00/day
+  # line with no real usage that reads as "new" on every single report,
+  # permanently burning one investigation slot for zero value and starving
+  # the real accounts under the concurrency budget. Revert (empty this list)
+  # once Bedrock Nova Lite either accrues real spend or is confirmed
+  # decommissioned.
+  # "Blinx - Management Account" excluded 2026-10-01 (user request): skip
+  # investigating this line entirely.
+  excludedLabels:
+    - 'Bedrock Nova Lite'
+    - 'Blinx - Management Account'
+
+memory:
+  # Every notable `@mention` always runs a fresh investigation (see
+  # packages/core/src/cost-orchestration.ts) — there is no "reuse without a
+  # new Agent SDK session" behavior anymore (2026-09-29, removed after this
+  # produced a confusing stale one-line ack instead of a real re-investigation
+  # on repeat mentions). This purely bounds how long the worker's own prior
+  # analysis for a line stays available to feed back into its *next*
+  # investigation of that same line as context, and how long DynamoDB keeps
+  # the record around.
+  retentionSeconds: 604800
+
+locks:
+  ttlSeconds: 300
+
+investigation:
+  # Raised 2026-10-01 (user request): BUDGET_EXHAUSTED/INSUFFICIENT_EVIDENCE
+  # placeholders ("The investigation stopped at a configured budget limit.")
+  # were showing up in the consolidated Slack message instead of a real
+  # conclusion — the old caps were cutting investigations off before they
+  # could gather enough evidence to converge. All related caps raised together
+  # since hitting any one of them produces the same placeholder.
+  maxDurationSeconds: 900
+  maxTurns: 20
+  maxBudgetUsd: 1.5
+  maxToolCalls: 32
+  maxConsecutiveToolErrors: 3
+  maxRepeatedEquivalentToolCalls: 2
+  maxResultCharacters: 8000
+
+tokens:
+  maxCumulativeInputTokens: 150000
+  maxCumulativeOutputTokens: 16000
+  maxFinalOutputTokens: 2500
+
+concurrency:
+  maxGlobalInvestigations: 5
+  # Matches maxGlobalInvestigations (2026-09-30, user request): was 3, which
+  # silently and permanently starved whichever notable line came last in
+  # report order whenever a report had more than 3 notable lines (this
+  # report currently has 4: Total AWS, Blinx - Management Account,
+  # PACO - Production, PACO - Non-Production — the last one, always
+  # PACO - Non-Production given report field order, never got a turn). With
+  # both caps equal, the global cap is the only practical limit.
+  maxPerReportInvestigations: 5
+
+evidence:
+  minimumConfidenceForLikelyDriverIdentified: 0.75
+  minimumEvidenceTypesForLikelyDriverIdentified: 2
+
+agentSdk:
+  sdkVersion: '0.3.274'
+  cliVersion: '2.1.274'
+  permissionMode: dontAsk
+  strictMcpConfig: true
+  settingSources: []
+  enabledMcpTools:
+    - mcp__cost__get_report
+    - mcp__cost__get_cost_and_usage
+    - mcp__cost__get_cost_anomalies
+    - mcp__cost__get_savings_plans_utilization
+    - mcp__cost__get_reservation_utilization
+    - mcp__cost__get_rightsizing_recommendations
+    - mcp__cost__describe_resources
+    - mcp__cost__get_prior_reports
+    - mcp__cost__list_cloudwatch_metrics
+    - mcp__cost__get_cloudwatch_metric
+    - mcp__cost__get_cloudtrail_events
+
+model:
+  # Claude Agent SDK talks to a self-hosted LiteLLM gateway
+  # (docs/adr/0002-litellm-model-gateway.md), which routes to Kimi K3
+  # (Moonshot AI), natively hosted on Bedrock — because direct
+  # Anthropic-on-Bedrock access is broken on this AWS account
+  # (INVALID_PAYMENT_INSTRUMENT on the Anthropic Marketplace vendor
+  # subscription, an account billing issue, not fixable via code). This is
+  # the exact same block and the exact same workaround
+  # paco-troubleshoot-agent already uses in this account (its
+  # config/harness.yaml, 2026-09-22 pivot) — see config/litellm.yaml here
+  # for the full history and re-verification note.
+  #
+  # Re-verify `upstreamBedrockModelId` against `aws bedrock
+  # list-inference-profiles` before every deploy: this account's Bedrock
+  # model availability has changed within days more than once. Flip back to
+  # a direct `anthropic`/`bedrock` provider (set provider: anthropic or
+  # bedrock, gatewayModelName/upstreamBedrockModelId: null) once Anthropic
+  # access on this account is confirmed working again — no other code
+  # change needed.
+  provider: litellm
+  modelId: null
+  gatewayModelName: kimi-k3
+  upstreamBedrockModelId: global.moonshotai.kimi-k3
+  effort: medium
+  temperature: 0
+  promptVersion: cost-agent-system-v1
+
+sessionPersistence:
+  enabled: true
+  store: s3-dynamodb
+  resumeEnabled: true
+
+fargate:
+  cpu: 512
+  memoryMiB: 1024
+  # Must stay above investigation.maxDurationSeconds (900) with margin — this
+  # is the Step Functions/ECS hard kill, which would otherwise cut the task
+  # before the graceful BUDGET_EXHAUSTED path gets to run.
+  taskTimeoutSeconds: 960
+  maximumConcurrentTasks: 5
+
+slack:
+  minimumUpdateIntervalSeconds: 30
+  oneThreadPerReportDate: true
+
+retention:
+  reportMetadataDays: 90
+  evidenceDays: 30
+  sessionTranscriptDays: 90
+
+featureFlags:
+  resourceDescribeTools: true
+  savingsRecommendations: true
